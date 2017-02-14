@@ -1,0 +1,559 @@
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <style>
+
+div{
+    text-align: center;
+}
+
+td{
+    border-width: 1px;
+    border-color: blue;
+    width:28px;
+    text-align:center;
+    font-size:24px;
+}
+th{
+    border-width: 1px;
+    border-color: blue;
+    width:28px;
+    text-align:center;
+    font-size:24px;
+}
+form{
+    width:100%;
+    height:100%;
+    margin: auto;
+}
+
+table{
+    margin:auto;
+}
+h1{
+    margin-left:auto;
+    margin-right: auto;
+    position:relative;
+}
+
+#motivo{
+    position:absolute;
+    bottom: 20px;
+    left: 35%;
+     }
+
+#ganado{
+    font-size:35px;
+    font-color:green;
+}
+
+.gray {
+    background-color: gray;
+}
+
+.FontRed {
+    color: red;
+}
+
+.FontGreen {
+    color: green;
+}
+        </style>
+        <script>
+/*
+Author: Lorenzo Moreno;
+Version: 2017.02.04;
+*/
+////////////////////////////////////////////////////////////////////////
+/////////////////// GENERA TABLERO Y VERIFICA VALORES //////////////////
+////////////////////////////////////////////////////////////////////////
+
+var letras = "ABCDEFGHI";
+var table;
+var errorUsuario = 0;
+var numberInCell = 0;
+var teclaNoValida = 0;
+
+// Genera el HTML de la tabla namejando el DOM. Añade eventos.
+function generaTablero(){
+    table = document.createElement("table");
+    var tablero = document.getElementById("tablero")
+    table.border = 1;
+    table.id = "tabla";
+    var texto;
+    var td,tr,th;
+    var gray = false;
+    tr = document.createElement("tr");
+    for(i=0;i<=9;i++){
+        th = document.createElement("th");
+        th.innerHTML = i ?  i : '&nbsp;' ;
+        tr.appendChild(th);
+    }
+    table.appendChild(tr);
+    for(var i = 0; i < 9; i++){
+        tr = document.createElement("tr");
+        tr.id = letras[i];
+        for(var j = 0; j<9;j++){
+        if (j==0){
+            td = document.createElement("td");
+            td.innerHTML = '<td><strong>'+letras[i]+'</strong></td>';
+            tr.appendChild(td);
+        }
+        gray = !(((Math.floor(i/3)) + (Math.floor(j/3)))%2);
+        td = document.createElement("td");
+        if(gray) td.className = 'gray';
+        td.addEventListener('keydown',keyDown);
+        td.addEventListener('keyup',keyUp,false);
+        td.addEventListener('keypress',obviarTeclasEsp,false);
+        td.contentEditable = true;
+        td.id = letras[i]+(j+1);
+        tr.appendChild(td);
+        }
+        table.appendChild(tr);
+    }
+    var form = document.createElement("form");
+    form.action="javascript:";
+    var input = document.createElement("input");
+    input.type = "submit";
+    input.value = "resolver";
+    input.id = "submit";
+    input.addEventListener('click', meRindo);
+    form.appendChild(input);
+    tablero.appendChild(table);
+    tablero.appendChild(form);
+}
+
+// Pone en rojo los errores
+function ponerColor(obj){
+    var aIJ = id2ij(obj.target.id);
+    var gray = (obj.target.className.search('gray') >= 0) ? ' gray ' : '';
+    if (sudoku[aIJ[0]][aIJ[1]] == valorDeId(obj.target.id)){
+        obj.target.className = gray + ' FontGreen';
+        return 0;
+    }else{
+        obj.target.className = gray + ' FontRed';
+        return 1;
+    }
+}
+
+// Pasa los ID a índices: A5 = 04
+function id2ij(idCelda){
+    var numLetra,numero;
+    var aID = new Array();
+    numero = idCelda[1]-1;
+    var i = -1;
+    do{
+        i++;
+    }while(letras[i] != idCelda[0]);
+    numLetra = i;
+    aID = [numLetra,numero];
+    return aID;
+}
+
+// Pasa los índices a ID: 00 = A1
+function ij2id(iCelda,jCelda){
+    var aID = new Array();
+    aID.push(letras[iCelda]);
+    aID.push(jCelda+1);
+    return aID;
+}
+
+// Dado un ID del tipo 'A6' devuelve el valor de esa celda
+function valorDeId(id){
+    return document.getElementById(id).innerHTML;
+}
+
+// Comprobaciones al introducir numeros manualmente:
+//      ***Validate(objeto_de_evento) return true/false
+// Comprueba que al introducir el número no se repite en fila
+function rowValidate(obj){
+    obj = ('innerHTML' in obj)? obj: obj.target;
+    var letra, fila, columna;
+    letra = obj.id[0];
+    [fila,columna] = id2ij(obj.id);
+    for (var i = 1; i<=9; i++){
+        if ((valorDeId(letra+i) == obj.innerHTML) && ((columna+1) != i)) return false;
+    }
+    return true;
+}
+
+// Comprueba que el número no se repite en columna
+function columnValidate(obj){
+    obj = ('innerHTML' in obj)? obj: obj.target;
+    var fila, columna;
+    var comparar = 0;
+    [fila,columna] = id2ij(obj.id);
+    for (var i = 0; i<9;i++){
+        if(valorDeId(letras[i]+obj.id[1]) == obj.innerHTML && letras[fila] != letras[i]){
+            return false;
+        }
+    }
+    return true;
+}
+
+// Comprueba que el número no se repite en cuadrícula
+function squareValidate(obj){
+    obj = ('innerHTML' in obj)? obj: obj.target;
+    var squareCoord = new Array();
+    var aID = new Array();
+    var aIJ = id2ij(obj.id);
+    var valor;
+
+    squareCoord.push(Math.floor(aIJ[0]/3)); // Cuadrícula en filas: 0,1,2
+    squareCoord.push(Math.floor(aIJ[1]/3)); // Cuadrícula en columnas: 0,1,2
+    for(var i=0;i<3;i++){
+        for(var j=0;j<3;j++){
+        aID = ij2id(squareCoord[0]*3+Number(i),squareCoord[1]*3+Number(j));
+        valor = valorDeId(String(aID[0])+String(aID[1]));
+            if(valor == obj.innerHTML && obj.id != letras[squareCoord[0]*3+i]+(squareCoord[1]*3+j+1)){
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// Muestra error y vacía la celda
+function errores(text,obj){
+    obj = ('innerHTML' in obj)? obj: obj.target;
+    text = text || "Error general";
+    //alert(text);
+    obj.innerHTML = '';
+    document.getElementById('motivo').innerHTML = text;
+}
+
+// Vacía la celda cuando al pulsar tecla-abajo. Guarda lo que había.
+function keyDown(obj){
+    obj = ('innerHTML' in obj)? obj: obj.target;
+    numberInCell = obj.innerHTML.replace('\n','');
+    obj.innerHTML = "";
+}
+
+// Al soltar tecla escribe el número, verificando que esté correcto
+function keyUp(obj){
+    if(teclaNoValida) {
+        teclaNoValida = 0;
+        obj.target.innerHTML = numberInCell;
+        throw new Error("Pulsó intro o tab");
+    }
+    document.getElementById('motivo').innerHTML = '';
+    verificarNumero(obj);
+    errorUsuario += ponerColor(obj);
+    imprimeErrores();
+    if(hasGanado()){
+        document.getElementById('motivo').innerHTML = '<span id="ganado">¡¡ENHORABUENA!! ¡¡HAS GANADO!!</span>';
+    }
+}
+
+// Para captar la tecla pulsada
+function obviarTeclasEsp(obj){
+    var code = ('which' in obj) ? obj.which : obj.keyCode;
+    obj = ('innerHTML' in obj)? obj: obj.target;
+    var texto;
+    if(code == 13 || code == 9) { //Enter code o tab
+        teclaNoValida++;
+        texto = 'No pulses enter ni tab. Había un ' + numberInCell;
+        document.getElementById('motivo').innerHTML = texto;
+        obj.innerHTML = numberInCell;
+        return 1;
+    } else {
+        teclaNoValida = 0;
+    }
+}
+
+function imprimeErrores(){
+    document.getElementById('Errores').innerHTML = String(errorUsuario);
+}
+
+// Comprueba que el número se puede colocar, segun normas
+function verificarNumero(obj){
+    obj = ('innerHTML' in obj)? obj: obj.target;
+
+    if(!(obj.innerHTML-0)){
+        obj.innerHTML = '';
+    }
+
+    if (!rowValidate(obj)){
+        mensaje = "Número repetido en la fila",
+        errores(mensaje,obj);
+        return 1;
+    }
+    if (!columnValidate(obj)){
+        mensaje = "Número repetido en columna";
+        errores(mensaje,obj);
+        return 1;
+    }
+    if (!squareValidate(obj)){
+        mensaje = "Ese número ya existe en el cuadrante"
+        errores(mensaje,obj);
+        return 1;
+    }
+    return 0;
+}
+
+////////////////////////////////////////////////////////////////////////
+///////////////////  GENERA ALEATORIAMENTE UN SUDOKU  //////////////////
+////////////////////////////////////////////////////////////////////////
+
+// 1. generaSudoku() busca la solución a un tablero vacío;
+// 2. imprimeSudoku(visible) lo muestra en HTML, visible o no;
+
+var sudoku = new Array(9);
+var iteracion = 0;
+
+// Función principal genera sudoku[9][9]
+function generaSudoku(numero){
+    var numero = numero || 9;
+    var ceros;
+    var text;
+    text = "";
+    do{
+        for(var i=0; i<9; i++) {
+        sudoku[i] = new Array(9);
+        sudoku[i].fill(0);
+    }
+        for(var i=0;i<9;i++){
+            rellenarFila(i);
+        }
+        ceros = buscaCeros(numero);
+        iteracion++;
+    }while (ceros.length > 0);
+}
+
+function buscaCeros(filas){
+    filas = filas || 6;
+    var ceros = new Array();
+    for(i=1;i<filas;i++){
+        for(j=0;j<9;j++){
+            if (!sudoku[i][j]){
+                ceros.push([i+1,j+1]);
+            }
+        }
+    }
+    return ceros;
+}
+
+// Saca sudoku por html. Como comentario HTML por omisión
+function imprimeSudoku(visible){
+    var text = "";
+    var format, salto;
+    if (visible) format = "&nbsp;&nbsp;"; else format = " ";
+    if (visible) salto = "<br>"; else salto = "\n";
+    for(j=0;j<9;j++){
+        for(var i=0;i<9;i++){
+            text = text + format + sudoku[j][i];
+        }
+        text += salto;
+    }
+
+    if(visible) {
+        text += '<!-- Iteración ' + iteracion + ' --'+'>';
+    }else {
+        text = '<!-- Iteracion: '+ iteracion + '\n\n' + text + ' --'+'>';
+    }
+    document.getElementById('solucion').innerHTML = text;
+}
+
+// Genera filas que cumplan la condición fila/columna/cuadro
+function rellenarFila(indice_i){
+    var flag, error=0;
+    var indiceRellenar = [indice_i,0];
+    var aleatorios = new Array();
+    var j=0;
+    aleatorios = numerosMezclados();
+    while(indiceRellenar[1] < 9){
+        flag = 0;
+        numero = aleatorios[j];
+
+        if(!columnTest(indiceRellenar,numero)){
+            flag++;
+        }
+        if(!squareTest(indiceRellenar,numero)){
+            flag++;
+        }
+        if(!flag){
+            sudoku[indice_i][indiceRellenar[1]] = numero;
+            indiceRellenar[1]++;
+            aleatorios = borraIndex(j,aleatorios);
+            j=0;
+        }else{
+            j++;
+            if(j >= aleatorios.length){
+                //sudoku[indice_i][indiceRellenar[1]] = numero;
+                indiceRellenar[1]++;
+                j = 0;
+            }
+        }
+    }
+    return 1;
+}
+
+// Devuelve un número aleatorio de un array. Usado en numerosMezclados()
+function numeroAleatorio(array){
+    var index;
+    index = Math.floor(Math.random() * array.length-.00001);
+    return array[index];
+}
+
+// Genera arrays aleatorios de cifras únicas
+function numerosMezclados(){
+    var numbers = [1,2,3,4,5,6,7,8,9];
+    var aleatorios = new Array();
+    for(var i = 0; i<9;i++){
+        numero = numeroAleatorio(numbers);
+        aleatorios.push(numero);
+        borraNumero(numero, numbers);
+    }
+    return aleatorios;
+}
+
+// Busca un número en un array y lo borra. Usado en numerosMezclados()
+function borraNumero(numero,array){
+    var index;
+    index = buscaNumero(numero,array);
+    array = borraIndex (index, array);
+    return array;
+}
+
+// Comprueba condición de fila en array sudoku[9][9]
+function rowTest(indices,valor){
+    for (var i = 0; i < 9; i++){
+        if ((sudoku[indices[0]][i] == valor) && (i != indices[1])){
+            return false;
+        }
+    }
+    return true;
+}
+
+// Comprueba condición de columna en array sudoku[9][9]
+function columnTest(indices,valor){
+    for (var i = 0; i < 9; i++){
+        if ((sudoku[i][indices[1]] == valor) && (i != indices[0])){
+            return false;
+        }
+    }
+    return true;
+}
+
+// Comprueba condición de cuadro en array sudoku[9][9]
+function squareTest(indices,valor){
+    var squareCoord = new Array();
+    var aID = new Array();
+
+    squareCoord.push(Math.floor(indices[0]/3)); // Cuadrícula en filas: 0,1,2
+    squareCoord.push(Math.floor(indices[1]/3)); // Cuadrícula en columnas: 0,1,2
+    for(var i=0;i<3;i++){
+        for(var j=0;j<3;j++){
+            aID = [squareCoord[0]*3+Number(i),squareCoord[1]*3+Number(j)];
+            if(valor == sudoku[aID[0]][aID[1]] && indices != [aID[0],aID[1]]){
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// Busca núero en un array y devuelve su index
+function buscaNumero(cual,array){
+    var index;
+    index = array.findIndex(function(item) { return item == cual });
+    return index;
+}
+
+// Dado un indice borra ese elemento de un array
+function borraIndex(indice,array){
+    array.splice(indice,1);
+    return array;
+}
+
+////////////////////////////////////////////////////////////////////////
+///////////////////////////      MOSTRAR       /////////////////////////
+////////////////////////////////////////////////////////////////////////
+
+// Muestra solucion en tablero
+function meRindo(){
+    var valor;
+    var id;
+    var aID = new Array();
+    for(i=0; i<9; i++){
+        for(j=0; j<9; j++){
+            valor = sudoku[i][j];
+            colocaNumeros(valor,i,j);
+            //aID = ij2id(i,j);
+            //id = aID[0]+String(aID[1]);
+            //table.children[i+1].cells.namedItem(id).innerHTML = valor;
+        }
+    }
+    return 0;
+}
+
+function colocaNumeros(valor,fila,columna,id){
+    var aID, celda;
+    if(!id){
+        aID = ij2id(fila,columna);
+        id = aID[0]+String(aID[1]);
+    }
+    celda = table.children[fila+1].cells.namedItem(id);
+    celda.innerHTML = valor;
+    return celda;
+}
+
+// Muestra los nueve números cada tres cuadros
+function muestraPoco(cuadro_j,num){
+    cuadro_j = cuadro_j || 0;
+    num = num || 3;
+    var aleatorios;
+    var element, valor;
+    for(var k = 0; k<3; k++){
+        for(var i = 0; i<3; i++){
+            aleatorios = numerosMezclados();
+            for(var j = 0; j < num; j++){
+                //aID = ij2id([i],[aleatorios[0]]);
+                //element = document.getElementById(id[0]+id[1]);
+                valor = sudoku[k*3+i][aleatorios[0]-1];
+                element = colocaNumeros(valor,k*3+i,aleatorios[0]-1);
+                element.contentEditable = false;
+                borraIndex(0,aleatorios);
+            }
+        }
+        }
+}
+
+function hasGanado(){
+    var aID;
+    for(var i = 0; i < 9; i++){
+        for(var j = 0; j < 9; j++){
+            aID = ij2id(i,j);
+            if (sudoku[i][j] != valorDeId(aID[0]+aID[1])){
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+////////////////////////////////////////////////////////////////////////
+//////////////////////////  INICIAR EL JUEGO  //////////////////////////
+////////////////////////////////////////////////////////////////////////
+
+function inicio(){
+    generaTablero();
+    generaSudoku(8);
+    muestraPoco();
+    imprimeSudoku();
+}
+
+
+        </script>
+    </head>
+    <body onload="inicio();">
+        <div>
+            <div id="solucion"></div>
+            <h1>Sudoku 9x9</h1>
+            <h5>Errores: <span id="Errores">0</span></h5>
+            <div id="tablero"></div>
+            <div id="motivo"></div>
+        </div>
+
+    </body>
+</html>
